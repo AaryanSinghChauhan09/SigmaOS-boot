@@ -83,7 +83,7 @@ impl BootStage for SimpleBootStage {
     }
 
     fn verify(&self, _public_key: &[u8]) -> Result<bool, BootError> {
-        Ok(true)
+        Err(BootError::VerificationFailed)
     }
 }
 
@@ -115,6 +115,9 @@ impl BootChain for SimpleBootChain {
     }
 
     fn verify_chain(&self, public_key: &[u8]) -> Result<bool, BootError> {
+        if self.stages.iter().all(Option::is_none) {
+            return Ok(false);
+        }
         for stage_option in &self.stages {
             if let Some(ref stage) = *stage_option {
                 if !stage.verify(public_key)? {
@@ -153,30 +156,27 @@ pub struct SimpleSecureBoot {
 impl SimpleSecureBoot {
     pub fn new() -> Self {
         SimpleSecureBoot {
-            enabled: AtomicUsize::new(1),
-            strict_mode: AtomicUsize::new(1),
+            enabled: AtomicUsize::new(0),
+            strict_mode: AtomicUsize::new(0),
         }
     }
 }
 
 impl SecureBoot for SimpleSecureBoot {
     fn enable(&mut self) -> Result<(), BootError> {
-        self.enabled.store(1, Ordering::SeqCst);
-        Ok(())
+        Err(BootError::VerificationFailed)
     }
 
     fn disable(&mut self) -> Result<(), BootError> {
-        self.enabled.store(0, Ordering::SeqCst);
-        Ok(())
+        Err(BootError::VerificationFailed)
     }
 
     fn is_enabled(&self) -> bool {
-        self.enabled.load(Ordering::SeqCst) == 1
+        false
     }
 
     fn set_enforcement_mode(&mut self, strict: bool) {
-        self.strict_mode
-            .store(if strict { 1 } else { 0 }, Ordering::SeqCst);
+        let _ = strict;
     }
 }
 

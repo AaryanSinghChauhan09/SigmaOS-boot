@@ -3,4 +3,4 @@
 
 pub mod boot;
 
-pub use boot::Boot;
+pub use boot::{BootManager, SigmaBootManager, SigmaBootloaderEngine};
