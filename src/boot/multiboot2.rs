@@ -252,7 +252,7 @@ impl Multiboot2BootLoader {
     pub fn new() -> Self {
         Self {
             bootloader_name: "SigmaOS Multiboot2 GRUB-helper".to_string(),
-            is_verified: true,
+            is_verified: false,
         }
     }
 }
@@ -263,21 +263,18 @@ impl BootLoader for Multiboot2BootLoader {
         kernel_entry: usize,
         _params: *const BootParams,
     ) -> Result<(), BootError> {
-        if kernel_entry == 0 {
-            return Err(BootError::InvalidConfiguration);
-        }
-        Ok(())
+        let _ = (kernel_entry, _params);
+        Err(BootError::FirmwareUnavailable)
     }
 
     fn load_kernel(&self, _source: &str, _dest: usize, size: usize) -> Result<usize, BootError> {
-        if size == 0 {
-            return Err(BootError::MemoryMapFailed);
-        }
-        Ok(size)
+        let _ = (_source, _dest, size);
+        Err(BootError::FirmwareUnavailable)
     }
 
     fn load_initrd(&self, _source: &str, _dest: usize, size: usize) -> Result<usize, BootError> {
-        Ok(size)
+        let _ = (_source, _dest, size);
+        Err(BootError::FirmwareUnavailable)
     }
 
     fn parse_cmdline(&self, cmdline: &str) -> Result<BootParams, BootError> {
@@ -287,12 +284,12 @@ impl BootLoader for Multiboot2BootLoader {
     }
 
     fn setup_memory(&self, params: &mut BootParams) -> Result<(), BootError> {
-        params.memory_size = 32 * 1024 * 1024 * 1024; // 32 GB simulated for Multiboot2
-        Ok(())
+        let _ = params;
+        Err(BootError::FirmwareUnavailable)
     }
 
     fn setup_arch(&self) -> Result<(), BootError> {
-        Ok(())
+        Err(BootError::FirmwareUnavailable)
     }
 }
 
@@ -395,7 +392,7 @@ mod tests {
     fn test_multiboot2_bootloader_actions() {
         let bootloader = Multiboot2BootLoader::new();
         assert_eq!(bootloader.bootloader_name, "SigmaOS Multiboot2 GRUB-helper");
-        assert!(bootloader.is_verified);
+        assert!(!bootloader.is_verified);
 
         let mut params = bootloader.parse_cmdline("initrd=ramdisk.img").unwrap();
         assert_eq!(params.cmdline, "initrd=ramdisk.img");

@@ -11,6 +11,10 @@ a cryptographic verifier, authenticated measurement storage, and firmware or
 bootloader integration. These scaffolding types must not be used to authorize
 kernel or initramfs images.
 
+The Multiboot2 loader validates header/MBI byte slices, but does not load
+images, enter a kernel, configure memory, or initialize an architecture; those
+operations return unavailable instead of reporting simulated success.
+
 The UEFI secure-boot, ACPI discovery, firmware-capsule, and microcode-update
 helpers also lack their required crypto and hardware backends. They now return
 unverified/unavailable status instead of accepting transformed bytes or
