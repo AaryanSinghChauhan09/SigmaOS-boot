@@ -11,6 +11,11 @@ a cryptographic verifier, authenticated measurement storage, and firmware or
 bootloader integration. These scaffolding types must not be used to authorize
 kernel or initramfs images.
 
+The UEFI secure-boot, ACPI discovery, firmware-capsule, and microcode-update
+helpers also lack their required crypto and hardware backends. They now return
+unverified/unavailable status instead of accepting transformed bytes or
+reporting simulated firmware changes as complete.
+
 ## Development
 
 ```sh

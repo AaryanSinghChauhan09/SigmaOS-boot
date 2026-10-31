@@ -542,27 +542,16 @@ impl CpuMicrocodePatchEngine {
 
     /// Parses AMD microcode container header (magic 0x414d44 "AMD")
     pub fn parse_amd_header(&self, raw_bytes: &[u8]) -> Result<MicrocodeHeader, BootError> {
-        if raw_bytes.len() < 12 || &raw_bytes[0..3] != b"AMD" {
-            return Err(BootError::InvalidConfiguration);
-        }
-
-        let patch_id = u32::from_le_bytes(raw_bytes[4..8].try_into().unwrap_or([0; 4]));
-        let patch_len = u32::from_le_bytes(raw_bytes[8..12].try_into().unwrap_or([0; 4])) as usize;
-
-        Ok(MicrocodeHeader {
-            vendor: MicrocodeVendor::Amd,
-            update_revision: patch_id,
-            date_code: 20260101,
-            processor_signature: 0x00800F12,
-            checksum: 0x55AA55AA,
-            loader_revision: 1,
-            patch_size_bytes: patch_len,
-        })
+        let _ = raw_bytes;
+        Err(BootError::FirmwareUnavailable)
     }
 
     /// Cryptographic checksum verification before CPU firmware update
     pub fn verify_microcode_patch(&self, raw_bytes: &[u8], header: &MicrocodeHeader) -> bool {
-        if raw_bytes.len() < header.patch_size_bytes {
+        if header.vendor != MicrocodeVendor::Intel
+            || header.patch_size_bytes == 0
+            || raw_bytes.len() < header.patch_size_bytes
+        {
             return false;
         }
 
@@ -574,18 +563,13 @@ impl CpuMicrocodePatchEngine {
             }
         }
         // Intel microcode requires total sum of u32 dwords over full patch to equal 0
-        sum == 0 || header.vendor == MicrocodeVendor::Amd
+        sum == 0
     }
 
     /// Applies microcode patch to specified CPU core
     pub fn apply_microcode_update(&mut self, core_id: usize, header: MicrocodeHeader) -> bool {
-        if core_id >= self.core_patch_levels.len() {
-            return false;
-        }
-
-        self.core_patch_levels[core_id] = header.update_revision;
-        self.active_patches.push(header);
-        true
+        let _ = (core_id, header);
+        false
     }
 
     pub fn get_core_patch_level(&self, core_id: usize) -> Option<u32> {
@@ -630,24 +614,11 @@ pub struct FirmwareCapsuleUpdateManager {
 
 impl FirmwareCapsuleUpdateManager {
     pub fn new() -> Self {
-        let mut mgr = Self {
+        Self {
             esrt_entries: Vec::new(),
             staged_capsules: Vec::new(),
             current_status: CapsuleUpdateStatus::Idle,
-        };
-
-        // System Firmware ESRT entry
-        mgr.register_esrt_entry(EsrtEntry {
-            firmware_class_guid: "3b61b360-1e5b-4227-b50a-8d184713e2f5".to_string(),
-            firmware_type: EsrtFirmwareType::SystemFirmware,
-            firmware_version: 0x02000000,
-            lowest_supported_version: 0x01000000,
-            capsule_flags: 0x00000001,
-            last_attempt_version: 0x02000000,
-            last_attempt_status: 0,
-        });
-
-        mgr
+        }
     }
 
     pub fn register_esrt_entry(&mut self, entry: EsrtEntry) {
@@ -656,12 +627,8 @@ impl FirmwareCapsuleUpdateManager {
 
     /// Verifies standard EFI_CAPSULE_HEADER signature and flags
     pub fn verify_capsule_header(&self, capsule_bytes: &[u8]) -> bool {
-        if capsule_bytes.len() < 16 {
-            return false;
-        }
-
-        // Header check magic "CAPSULE_SIG_01" or valid header length
-        capsule_bytes.starts_with(b"CAPSULE_SIG") || capsule_bytes[0..4] == [0x50, 0x53, 0x41, 0x43]
+        let _ = capsule_bytes;
+        false
     }
 
     /// Stages a firmware capsule for post-reboot execution
@@ -693,28 +660,7 @@ impl FirmwareCapsuleUpdateManager {
 
     /// Simulates firmware capsule processing during warm reboot POST stage
     pub fn process_reboot_capsules(&mut self) -> bool {
-        if self.current_status != CapsuleUpdateStatus::Staged {
-            return false;
-        }
-
-        self.current_status = CapsuleUpdateStatus::FlashingInPost;
-
-        for (guid, payload) in &self.staged_capsules {
-            if let Some(entry) = self
-                .esrt_entries
-                .iter_mut()
-                .find(|e| &e.firmware_class_guid == guid)
-            {
-                let new_ver = u32::from_le_bytes(payload[12..16].try_into().unwrap_or([0; 4]));
-                entry.firmware_version = new_ver;
-                entry.last_attempt_version = new_ver;
-                entry.last_attempt_status = 0;
-            }
-        }
-
-        self.staged_capsules.clear();
-        self.current_status = CapsuleUpdateStatus::UpdateSuccess;
-        true
+        false
     }
 }
 
@@ -776,46 +722,11 @@ impl SmbiosFirmwareParser {
 
     /// Parses SMBIOS Entry Point Anchor ("_SM_" or "_SM3_")
     pub fn parse_smbios_entry_point(&mut self, table_bytes: &[u8]) -> bool {
-        if table_bytes.len() < 16 {
-            return false;
-        }
-
-        if &table_bytes[0..4] == b"_SM_" || &table_bytes[0..5] == b"_SM3_" {
-            // Populate mock SMBIOS system tables
-            self.bios_info = Some(SmbiosType0BiosInfo {
-                vendor: "SigmaOS Sovereign Core UEFI".to_string(),
-                version: "2.4.0-Sovereign".to_string(),
-                release_date: "2026-08-25".to_string(),
-                bios_characteristics: 0x0000000000000009, // PCI & PCMCIA supported
-            });
-
-            self.system_info = Some(SmbiosType1SystemInfo {
-                manufacturer: "SigmaOS Systems Corp".to_string(),
-                product_name: "SigmaOS Enterprise Station".to_string(),
-                version: "v2.0".to_string(),
-                serial_number: "SIGMA-2026-8890".to_string(),
-                uuid: [
-                    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x11, 0x22, 0x33, 0x44, 0x55,
-                    0x66, 0x77, 0x88,
-                ],
-            });
-
-            self.baseboard_info = Some(SmbiosType2BaseboardInfo {
-                manufacturer: "SigmaOS Hardware Labs".to_string(),
-                product: "Sovereign X86_64 Motherboard".to_string(),
-                version: "Rev 1.2".to_string(),
-                serial_number: "MB-8890-XYZ".to_string(),
-            });
-
-            self.chassis_info = Some(SmbiosType3ChassisInfo {
-                manufacturer: "SigmaOS Chassis Labs".to_string(),
-                chassis_type: 0x03, // Desktop
-                version: "v1.0".to_string(),
-            });
-
-            return true;
-        }
-
+        let _ = table_bytes;
+        self.bios_info = None;
+        self.system_info = None;
+        self.baseboard_info = None;
+        self.chassis_info = None;
         false
     }
 }
@@ -1293,8 +1204,8 @@ mod tests {
         assert_eq!(intel_hdr.vendor, MicrocodeVendor::Intel);
         assert_eq!(intel_hdr.update_revision, 0x000000A2);
 
-        assert!(engine.apply_microcode_update(0, intel_hdr));
-        assert_eq!(engine.get_core_patch_level(0), Some(0x000000A2));
+        assert!(!engine.apply_microcode_update(0, intel_hdr));
+        assert_eq!(engine.get_core_patch_level(0), Some(0));
 
         // AMD microcode header test
         let mut amd_bytes = vec![0u8; 16];
@@ -1302,43 +1213,30 @@ mod tests {
         amd_bytes[4..8].copy_from_slice(&0x08001015u32.to_le_bytes());
         amd_bytes[8..12].copy_from_slice(&1024u32.to_le_bytes());
 
-        let amd_hdr = engine.parse_amd_header(&amd_bytes).unwrap();
-        assert_eq!(amd_hdr.vendor, MicrocodeVendor::Amd);
-        assert_eq!(amd_hdr.update_revision, 0x08001015);
+        assert!(engine.parse_amd_header(&amd_bytes).is_err());
     }
 
     #[test]
     fn test_firmware_capsule_update_manager() {
         let mut mgr = FirmwareCapsuleUpdateManager::new();
-        assert_eq!(mgr.esrt_entries.len(), 1);
+        assert_eq!(mgr.esrt_entries.len(), 0);
 
         let mut capsule = vec![0u8; 32];
         capsule[0..11].copy_from_slice(b"CAPSULE_SIG");
         capsule[12..16].copy_from_slice(&0x03000000u32.to_le_bytes()); // version 3.0.0.0
 
         let guid = "3b61b360-1e5b-4227-b50a-8d184713e2f5";
-        assert!(mgr.stage_capsule_payload(guid, &capsule).is_ok());
-        assert_eq!(mgr.current_status, CapsuleUpdateStatus::Staged);
-
-        assert!(mgr.process_reboot_capsules());
-        assert_eq!(mgr.current_status, CapsuleUpdateStatus::UpdateSuccess);
-        assert_eq!(mgr.esrt_entries[0].firmware_version, 0x03000000);
+        assert!(mgr.stage_capsule_payload(guid, &capsule).is_err());
+        assert_eq!(mgr.current_status, CapsuleUpdateStatus::Idle);
+        assert!(!mgr.process_reboot_capsules());
     }
 
     #[test]
     fn test_smbios_firmware_parser() {
         let mut parser = SmbiosFirmwareParser::new();
-        assert!(parser.parse_smbios_entry_point(b"_SM_123456789012"));
-        assert!(parser.bios_info.is_some());
-        assert_eq!(
-            parser.bios_info.as_ref().unwrap().vendor,
-            "SigmaOS Sovereign Core UEFI"
-        );
-        assert!(parser.system_info.is_some());
-        assert_eq!(
-            parser.system_info.as_ref().unwrap().manufacturer,
-            "SigmaOS Systems Corp"
-        );
+        assert!(!parser.parse_smbios_entry_point(b"_SM_123456789012"));
+        assert!(parser.bios_info.is_none());
+        assert!(parser.system_info.is_none());
     }
 
     #[test]

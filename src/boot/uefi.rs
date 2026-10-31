@@ -109,9 +109,9 @@ pub struct SimpleSecureBoot {
 impl SimpleSecureBoot {
     pub fn new() -> Self {
         let default_cert = UefiCertificate {
-            key_id: 1001,
+            key_id: 0,
             subject: [0; 32],
-            hash_dilithium5: [0x42; 64],
+            hash_dilithium5: [0; 64],
         };
         SimpleSecureBoot {
             bootloader: SimpleUEFIBootloader::new(),
@@ -125,46 +125,13 @@ impl SimpleSecureBoot {
 
 impl SecureBoot for SimpleSecureBoot {
     fn verify_signature(&self, data: &[u8]) -> Result<bool, BootError> {
-        // Calculate hash
-        let mut data_hash = [0u8; 64];
-        for i in 0..data.len().min(64) {
-            data_hash[i] = data[i].wrapping_add(0x13);
-        }
-
-        // 1. Check DBX (Forbidden Revocation List) first
-        if self.is_revoked(&data_hash) {
-            return Err(BootError::SignatureRevoked);
-        }
-
-        // 2. Check DB (Authorized List) for matching Dilithium-5 hash signature
-        let mut authorized = false;
-        for cert in &self.db_store {
-            let mut match_found = true;
-            for i in 0..64 {
-                if cert.hash_dilithium5[i] != data_hash[i] {
-                    match_found = false;
-                    break;
-                }
-            }
-            if match_found {
-                authorized = true;
-                break;
-            }
-        }
-
-        if !authorized && self.db_store.len() > 0 {
-            return Err(BootError::Unverified);
-        }
-
-        Ok(true)
+        let _ = data;
+        Err(BootError::Unverified)
     }
 
     fn sign(&self, data: &[u8]) -> Result<Vec<u8>, BootError> {
-        let mut signature = Vec::new();
-        for byte in data {
-            signature.push(byte.wrapping_add(0x42));
-        }
-        Ok(signature)
+        let _ = data;
+        Err(BootError::Unverified)
     }
 
     fn is_revoked(&self, hash: &[u8]) -> bool {
@@ -303,22 +270,17 @@ pub struct AcpiParser {
 
 impl AcpiParser {
     pub fn find_rsdp(&mut self, start_address: u64, scan_range: usize) -> bool {
-        // Simulates scanning UEFI system memory map for ACPI RSDP signature ("RSD PTR ")
-        if start_address > 0 && scan_range > 0 {
-            self.rsdp_address = start_address + 0x10;
-            return true;
-        }
+        let _ = (start_address, scan_range);
+        self.rsdp_address = 0;
+        self.fadt_address = 0;
+        self.madt_address = 0;
         false
     }
 
     pub fn parse_tables(&mut self) -> bool {
-        if self.rsdp_address == 0 {
-            return false;
-        }
-        // Simulates parsing FADT (Fixed ACPI Description Table) and MADT (Multiple APIC Description Table)
-        self.fadt_address = self.rsdp_address + 0x40;
-        self.madt_address = self.rsdp_address + 0x100;
-        true
+        self.fadt_address = 0;
+        self.madt_address = 0;
+        false
     }
 }
 
