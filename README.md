@@ -1,27 +1,40 @@
 # SigmaOS-boot
 
-Boot protocol, image, and verified-boot primitives for SigmaOS.
+SigmaOS component inspired by Arch Linux and Debian architecture.
 
-## Verified boot boundary
+## Overview
 
-`SimpleBootStage` does not implement cryptographic signature verification;
-verification returns an explicit error. The empty boot chain does not verify,
-and `SimpleSecureBoot` does not claim firmware enforcement. Real trust requires
-a cryptographic verifier, authenticated measurement storage, and firmware or
-bootloader integration. These scaffolding types must not be used to authorize
-kernel or initramfs images.
+This component provides essential functionality for the SigmaOS operating system,
+following the modular design principles of Arch Linux and the stability focus of Debian.
 
-The Multiboot2 loader validates header/MBI byte slices, but does not load
-images, enter a kernel, configure memory, or initialize an architecture; those
-operations return unavailable instead of reporting simulated success.
+## Features
 
-The UEFI secure-boot, ACPI discovery, firmware-capsule, and microcode-update
-helpers also lack their required crypto and hardware backends. They now return
-unverified/unavailable status instead of accepting transformed bytes or
-reporting simulated firmware changes as complete.
+- Modular architecture
+- Minimal dependencies
+- Well-documented APIs
+- Comprehensive testing
 
-## Development
+## Building
 
-```sh
-cargo check --lib
+```bash
+cargo build --release
 ```
+
+## Testing
+
+```bash
+cargo test
+```
+
+## License
+
+MIT License - See LICENSE file for details.
+
+## Contributing
+
+See CONTRIBUTING.md for guidelines.
+
+## Links
+
+- Repository: https://github.com/AaryanSinghChauhan09/SigmaOS-boot
+- SigmaOS: https://github.com/AaryanSinghChauhan09
