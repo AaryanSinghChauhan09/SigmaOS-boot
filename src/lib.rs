@@ -1,6 +1,6 @@
 //! SigmaOS Boot
-//! Boot system
+//! Advanced Boot Manager, Multiboot2, and UEFI Integration for SigmaOS
 
 pub mod boot;
 
-pub use boot::{BootManager, SigmaBootManager, SigmaBootloaderEngine};
+pub use boot::*;

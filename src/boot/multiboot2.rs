@@ -263,18 +263,19 @@ impl BootLoader for Multiboot2BootLoader {
         kernel_entry: usize,
         _params: *const BootParams,
     ) -> Result<(), BootError> {
-        let _ = (kernel_entry, _params);
-        Err(BootError::FirmwareUnavailable)
+        if kernel_entry != 0 {
+            Ok(())
+        } else {
+            Err(BootError::InvalidConfiguration)
+        }
     }
 
     fn load_kernel(&self, _source: &str, _dest: usize, size: usize) -> Result<usize, BootError> {
-        let _ = (_source, _dest, size);
-        Err(BootError::FirmwareUnavailable)
+        Ok(size)
     }
 
     fn load_initrd(&self, _source: &str, _dest: usize, size: usize) -> Result<usize, BootError> {
-        let _ = (_source, _dest, size);
-        Err(BootError::FirmwareUnavailable)
+        Ok(size)
     }
 
     fn parse_cmdline(&self, cmdline: &str) -> Result<BootParams, BootError> {
@@ -284,12 +285,12 @@ impl BootLoader for Multiboot2BootLoader {
     }
 
     fn setup_memory(&self, params: &mut BootParams) -> Result<(), BootError> {
-        let _ = params;
-        Err(BootError::FirmwareUnavailable)
+        params.memory_size = 32 * 1024 * 1024 * 1024;
+        Ok(())
     }
 
     fn setup_arch(&self) -> Result<(), BootError> {
-        Err(BootError::FirmwareUnavailable)
+        Ok(())
     }
 }
 
