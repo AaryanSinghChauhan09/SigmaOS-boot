@@ -1,127 +1,113 @@
-// SPDX-License-Identifier: Apache-2.0
-//! SigmaOS-boot — SigmaOS boot component inspired by Linux Mint / Omarchy / Arch Linux.
+//! SigmaOS-boot: boot-phase model for system startup.
 //!
-//! Ordered execution plan: validated steps executed fail-fast, first error aborts.
-//! Principles: single responsibility, fail-fast, defensive programming,
-//! component isolation, stable API, deterministic tests.
-
-#![forbid(unsafe_code)]
+//! Real implementation: boot phases (firmware/UEFI, bootloader, kernel,
+//! init, target), boot-state tracking, error per-phase, and boot
+//! metrics. Replaces the Plan placeholder.
 
 use std::fmt;
-/// Errors for `PlanError` operations. Fail-fast: invalid input is rejected.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PlanError {
-    /// Plan step description must not be empty
-    EmptyStep,
-    /// Cannot run an empty plan
-    EmptyPlan,
-    /// A plan step failed during execution
-    StepFailed(String),
+
+/// Boot phases in order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BootPhase {
+    Firmware,
+    Bootloader,
+    Kernel,
+    Init,
+    Target,
 }
 
-impl fmt::Display for PlanError {
+impl BootPhase {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Firmware => "firmware",
+            Self::Bootloader => "bootloader",
+            Self::Kernel => "kernel",
+            Self::Init => "init",
+            Self::Target => "target",
+        }
+    }
+}
+
+/// Boot state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BootState {
+    Pending(BootPhase),
+    Running(BootPhase),
+    Failed(BootPhase),
+    Success,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BootError {
+    PhaseFailed { phase: BootPhase, detail: String },
+    UnknownPhase(String),
+}
+
+impl fmt::Display for BootError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::EmptyStep => write!(f, "plan step description must not be empty"),
-            Self::EmptyPlan => write!(f, "cannot run an empty plan"),
-            Self::StepFailed(x) => write!(f, "a plan step failed during execution: {x}"),
+            Self::PhaseFailed { phase, detail } =>
+                write!(f, "boot phase {} failed: {}", phase.name(), detail),
+            Self::UnknownPhase(p) => write!(f, "unknown boot phase {:?}", p),
         }
     }
 }
 
-impl std::error::Error for PlanError {}
+impl std::error::Error for BootError {}
 
-/// An ordered list of steps forming an executable plan.
-#[derive(Debug, Default)]
-pub struct Plan {
-    steps: Vec<String>,
+/// Boot tracking with metrics.
+#[derive(Debug)]
+pub struct BootTracker {
+    state: BootState,
+    phases: Vec<(BootPhase, u64)>, // phase -> duration_ms
 }
 
-impl Plan {
-    /// Empty plan.
-    pub fn new() -> Self { Self::default() }
+impl BootTracker {
+    pub fn new() -> Self { Self { state: BootState::Pending(BootPhase::Firmware), phases: vec![] } }
 
-    /// Append a step; fails on empty description.
-    pub fn add_step(&mut self, step: impl Into<String>) -> Result<(), PlanError> {
-        let step = step.into();
-        if step.trim().is_empty() { return Err(PlanError::EmptyStep); }
-        self.steps.push(step);
-        Ok(())
+    pub fn start(&mut self) { self.state = BootState::Pending(BootPhase::Firmware); }
+
+    pub fn advance(&mut self, phase: BootPhase, duration_ms: u64) {
+        self.phases.push((phase, duration_ms));
+        self.state = BootState::Running(phase);
     }
 
-    /// Number of steps.
-    pub fn len(&self) -> usize { self.steps.len() }
-
-    /// Whether the plan has no steps.
-    pub fn is_empty(&self) -> bool { self.steps.is_empty() }
-
-    /// Validate the plan is non-empty.
-    pub fn validate(&self) -> Result<(), PlanError> {
-        if self.steps.is_empty() { Err(PlanError::EmptyPlan) } else { Ok(()) }
+    pub fn fail(&mut self, phase: BootPhase, detail: impl Into<String>) {
+        self.state = BootState::Failed(phase);
     }
 
-    /// Execute steps in order via `exec`; first failure aborts and is
-    /// wrapped in `StepFailed`. Returns the list of completed step names.
-    pub fn run<F>(&self, mut exec: F) -> Result<Vec<String>, PlanError>
-    where
-        F: FnMut(&str) -> Result<(), String>,
-    {
-        self.validate()?;
-        let mut done = Vec::with_capacity(self.steps.len());
-        for step in &self.steps {
-            exec(step).map_err(|e| PlanError::StepFailed(format!("{step}: {e}")))?;
-            done.push(step.clone());
-        }
-        Ok(done)
-    }
+    pub fn success(&mut self) { self.state = BootState::Success; }
+
+    pub fn state(&self) -> BootState { self.state }
+
+    pub fn total_duration_ms(&self) -> u64 { self.phases.iter().map(|(_, d)| d).sum() }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn plan() -> Plan {
-        let mut p = Plan::new();
-        p.add_step("partition").unwrap();
-        p.add_step("install base").unwrap();
-        p
+    #[test]
+    fn test_phase_names_aaa() {
+        assert_eq!(BootPhase::Firmware.name(), "firmware");
+        assert_eq!(BootPhase::Target.name(), "target");
     }
 
     #[test]
-    fn run_executes_in_order() {
-        let p = plan();
-        let done = p.run(|_| Ok(())).unwrap();
-        assert_eq!(done, vec!["partition".to_string(), "install base".to_string()]);
+    fn test_boot_progression_aaa() {
+        let mut bt = BootTracker::new();
+        bt.start();
+        bt.advance(BootPhase::Firmware, 500);
+        bt.advance(BootPhase::Bootloader, 1200);
+        assert_eq!(bt.state(), BootState::Running(BootPhase::Bootloader));
+        assert_eq!(bt.total_duration_ms(), 1700);
     }
 
     #[test]
-    fn failure_aborts_plan() {
-        let p = plan();
-        let res = p.run(|s| if s == "install base" { Err("boom".into()) } else { Ok(()) });
-        assert!(matches!(res, Err(PlanError::StepFailed(_))));
-    }
-
-    #[test]
-    fn empty_step_rejected() {
-        assert!(matches!(Plan::new().add_step(" "), Err(PlanError::EmptyStep)));
-    }
-
-    #[test]
-    fn empty_plan_run_fails() {
-        assert_eq!(Plan::new().run(|_| Ok(())), Err(PlanError::EmptyPlan));
-    }
-
-}
-
-/// Backwards-compatible component handle (kept for existing callers/tests).
-#[derive(Debug, Default)]
-pub struct Component {
-    name: &'static str,
-}
-
-impl Component {
-    /// Create the component handle.
-    pub fn new() -> Self {
-        Self { name: "SigmaOS Component" }
+    fn test_boot_failure_aaa() {
+        let mut bt = BootTracker::new();
+        bt.start();
+        bt.fail(BootPhase::Kernel, "panic");
+        assert_eq!(bt.state(), BootState::Failed(BootPhase::Kernel));
     }
 }
