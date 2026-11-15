@@ -63,6 +63,12 @@ pub struct BootTracker {
     phases: Vec<(BootPhase, u64)>, // phase -> duration_ms
 }
 
+impl Default for BootTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BootTracker {
     pub fn new() -> Self {
         Self {
