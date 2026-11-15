@@ -46,8 +46,9 @@ pub enum BootError {
 impl fmt::Display for BootError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::PhaseFailed { phase, detail } =>
-                write!(f, "boot phase {} failed: {}", phase.name(), detail),
+            Self::PhaseFailed { phase, detail } => {
+                write!(f, "boot phase {} failed: {}", phase.name(), detail)
+            }
             Self::UnknownPhase(p) => write!(f, "unknown boot phase {:?}", p),
         }
     }
@@ -63,24 +64,37 @@ pub struct BootTracker {
 }
 
 impl BootTracker {
-    pub fn new() -> Self { Self { state: BootState::Pending(BootPhase::Firmware), phases: vec![] } }
+    pub fn new() -> Self {
+        Self {
+            state: BootState::Pending(BootPhase::Firmware),
+            phases: vec![],
+        }
+    }
 
-    pub fn start(&mut self) { self.state = BootState::Pending(BootPhase::Firmware); }
+    pub fn start(&mut self) {
+        self.state = BootState::Pending(BootPhase::Firmware);
+    }
 
     pub fn advance(&mut self, phase: BootPhase, duration_ms: u64) {
         self.phases.push((phase, duration_ms));
         self.state = BootState::Running(phase);
     }
 
-    pub fn fail(&mut self, phase: BootPhase, detail: impl Into<String>) {
+    pub fn fail(&mut self, phase: BootPhase, _detail: impl Into<String>) {
         self.state = BootState::Failed(phase);
     }
 
-    pub fn success(&mut self) { self.state = BootState::Success; }
+    pub fn success(&mut self) {
+        self.state = BootState::Success;
+    }
 
-    pub fn state(&self) -> BootState { self.state }
+    pub fn state(&self) -> BootState {
+        self.state
+    }
 
-    pub fn total_duration_ms(&self) -> u64 { self.phases.iter().map(|(_, d)| d).sum() }
+    pub fn total_duration_ms(&self) -> u64 {
+        self.phases.iter().map(|(_, d)| d).sum()
+    }
 }
 
 #[cfg(test)]
