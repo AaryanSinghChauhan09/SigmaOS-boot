@@ -3,12 +3,12 @@ name = "SigmaOS-boot"
 tier = 2
 stability = "scaffold"
 language = "rust"
-description = "boot component"
+description = "Boot protocol, image, and verified-boot primitives for SigmaOS."
 upstream = []
 
 [contract]
 provides = ["component"]
-depends_on = []
+depends_on = ["SigmaOS-system"]
 
 [maturity]
 status = "Scaffold"
